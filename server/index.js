@@ -114,11 +114,9 @@ app.get('/api/google/autocomplete', async (req, res) => {
     
     for (let i = 0; i < Math.min(data.suggestions.length, limit); i++) {
       const suggestion = data.suggestions[i];
-      const placeText = suggestion.placePrediction?.text?.text || 
-                       suggestion.mainText || 
-                       suggestion.description || '';
+      const placeText = suggestion.placePrediction?.text?.text || '';
       
-      // Geocode to get coordinates
+      // Geocode to get coordinates - use the original text (which preserves language)
       if (placeText) {
         try {
           const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(placeText)}&key=${apiKey}`;
@@ -129,16 +127,43 @@ app.get('/api/google/autocomplete', async (req, res) => {
             const result = geocodeData.results[0];
             const location = result.geometry.location;
             
+            // Extract location type from address components
+            let locationType = 'Place';
+            if (result.address_components && result.address_components.length > 0) {
+              const firstComponent = result.address_components[0];
+              const allTypes = firstComponent.types || [];
+              
+              if (allTypes.includes('country')) {
+                locationType = 'Country';
+              } else if (allTypes.includes('administrative_area_level_1')) {
+                locationType = 'State/Province';
+              } else if (allTypes.includes('administrative_area_level_2')) {
+                locationType = 'Region';
+              } else if (allTypes.includes('locality')) {
+                locationType = 'City';
+              } else if (allTypes.includes('postal_town')) {
+                locationType = 'Town';
+              } else if (allTypes.includes('neighborhood')) {
+                locationType = 'Neighborhood';
+              } else if (allTypes.includes('sublocality')) {
+                locationType = 'Neighborhood';
+              } else if (allTypes.includes('premise')) {
+                locationType = 'Place';
+              } else if (allTypes.includes('point_of_interest')) {
+                locationType = 'POI';
+              }
+            }
+            
             predictions.push({
               lat: location.lat,
               lon: location.lng,
-              display_name: result.formatted_address,
+              display_name: placeText,
               place_id: suggestion.placePrediction?.placeId || '',
+              type: locationType,
             });
           }
         } catch (error) {
           console.error('Error geocoding suggestion:', error);
-          // Continue to next suggestion
         }
       }
     }

@@ -71,6 +71,7 @@ export default function MapView({ onBackToLanding }) {
     const location = {
       coords: [parseFloat(suggestion.lat), parseFloat(suggestion.lon)],
       name: suggestion.display_name,
+      type: suggestion.type || 'Place',
     };
 
     let hasPolygon = false;
@@ -91,11 +92,12 @@ export default function MapView({ onBackToLanding }) {
         const coloredPolygons = polygonData.map((poly) => ({
           ...poly,
           color,
+          type: location.type,
         }));
         setPolygons([...polygons, ...coloredPolygons]);
       } else {
         // Single polygon
-        setPolygons([...polygons, { ...polygonData, color }]);
+        setPolygons([...polygons, { ...polygonData, color, type: location.type }]);
       }
       hasPolygon = true;
     }
@@ -107,6 +109,7 @@ export default function MapView({ onBackToLanding }) {
         lat: location.coords[0],
         lng: location.coords[1],
         name: location.name,
+        type: location.type,
         radius: 5000, // 5km default radius for location
       };
       setCircles([...circles, newCircle]);
@@ -192,6 +195,9 @@ export default function MapView({ onBackToLanding }) {
                       <span className="suggestion-name">
                         {suggestion.display_name}
                       </span>
+                      <span className="suggestion-type">
+                        {suggestion.type || 'Place'}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -216,7 +222,10 @@ export default function MapView({ onBackToLanding }) {
                     className="marker-item polygon-item"
                     style={{ borderLeftColor: polygon.color || '#667eea' }}
                   >
-                    <span>🗺️ {polygon.name}</span>
+                    <div className="location-info">
+                      <span>🗺️ {polygon.name}</span>
+                      {polygon.type && <span className="location-type">{polygon.type}</span>}
+                    </div>
                     <button
                       onClick={() => handleDelete(polygon.id)}
                       className="delete-btn"
@@ -227,7 +236,10 @@ export default function MapView({ onBackToLanding }) {
                 ))}
                 {circles.map((circle) => (
                   <li key={circle.id} className="marker-item circle-item">
-                    <span>⭕ {circle.name}</span>
+                    <div className="location-info">
+                      <span>⭕ {circle.name}</span>
+                      {circle.type && <span className="location-type">{circle.type}</span>}
+                    </div>
                     <button
                       onClick={() => handleDelete(circle.id)}
                       className="delete-btn"
@@ -238,7 +250,10 @@ export default function MapView({ onBackToLanding }) {
                 ))}
                 {markers.map((marker) => (
                   <li key={marker.id} className="marker-item">
-                    <span>📍 {marker.name}</span>
+                    <div className="location-info">
+                      <span>📍 {marker.name}</span>
+                      {marker.type && <span className="location-type">{marker.type}</span>}
+                    </div>
                     <button
                       onClick={() => handleDelete(marker.id)}
                       className="delete-btn"

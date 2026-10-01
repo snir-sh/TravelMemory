@@ -74,10 +74,11 @@ export class GoogleMapsProvider extends MapProvider {
     try {
       console.log('[GoogleMapsProvider] Fetching polygon boundary via Nominatim:', name);
       
-      // Use Nominatim proxy for actual boundary polygons
-      const nominatimUrl = 'http://localhost:3001/api/nominatim/reverse';
+      // Use Nominatim search (by name) instead of reverse geocode
+      // Reverse geocode often returns building/POI boundaries instead of administrative areas
+      const nominatimUrl = 'http://localhost:3001/api/nominatim/search';
       const response = await fetch(
-        `${nominatimUrl}?lat=${lat}&lon=${lon}&zoom=10`
+        `${nominatimUrl}?q=${encodeURIComponent(name)}&limit=1`
       );
 
       if (!response.ok) {
@@ -85,28 +86,68 @@ export class GoogleMapsProvider extends MapProvider {
       }
 
       const data = await response.json();
+      
+      if (!data || data.length === 0) {
+        console.warn('[GoogleMapsProvider] No search results found');
+        return null;
+      }
+
+      const result = data[0];
+      
+      // Only use results that are administrative areas or boundaries
+      if (result.class !== 'boundary' && result.type !== 'administrative') {
+        console.warn('[GoogleMapsProvider] Result is not an administrative boundary, will use circle');
+        return null;
+      }
+
+      if (!result.geojson) {
+        console.warn('[GoogleMapsProvider] No GeoJSON in search result');
+        return null;
+      }
 
       // Check if we got a polygon from Nominatim
-      if (data.geojson && data.geojson.type === 'Polygon') {
-        const coordinates = data.geojson.coordinates[0];
+      if (result.geojson.type === 'Polygon') {
+        const coordinates = result.geojson.coordinates[0];
+        
+        // Check if polygon is valid and not too small
+        if (coordinates.length < 4) {
+          console.warn('[GoogleMapsProvider] Polygon has too few points, using circle fallback');
+          return null;
+        }
+        
         // Nominatim returns [lon, lat], we need [lat, lon]
         const polygonCoords = coordinates.map(coord => [coord[1], coord[0]]);
         
         return {
           id: Date.now(),
-          name: data.name || name,
+          name: result.name || name,
           coords: polygonCoords,
         };
       }
 
-      if (data.geojson && data.geojson.type === 'MultiPolygon') {
-        // Handle MultiPolygon - use the first polygon
-        const coordinates = data.geojson.coordinates[0][0];
-        const polygonCoords = coordinates.map(coord => [coord[1], coord[0]]);
+      if (result.geojson.type === 'MultiPolygon') {
+        // Handle MultiPolygon - use the largest polygon
+        const polygons = result.geojson.coordinates;
+        let largestPolygon = null;
+        let largestSize = 0;
+        
+        polygons.forEach(poly => {
+          if (poly[0] && poly[0].length > largestSize) {
+            largestSize = poly[0].length;
+            largestPolygon = poly[0];
+          }
+        });
+        
+        if (!largestPolygon || largestPolygon.length < 4) {
+          console.warn('[GoogleMapsProvider] MultiPolygon too small, using circle fallback');
+          return null;
+        }
+        
+        const polygonCoords = largestPolygon.map(coord => [coord[1], coord[0]]);
         
         return {
           id: Date.now(),
-          name: data.name || name,
+          name: result.name || name,
           coords: polygonCoords,
         };
       }
