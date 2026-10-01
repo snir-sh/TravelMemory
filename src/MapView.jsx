@@ -19,6 +19,27 @@ const COLOR_PALETTE = [
 
 const getColorForPolygon = (index) => COLOR_PALETTE[index % COLOR_PALETTE.length];
 
+const STORAGE_KEY = 'travel-memory-trips';
+
+const saveToLocalStorage = (markers, polygons, circles) => {
+  const data = { markers, polygons, circles };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  console.log('📁 Trip saved to local storage');
+};
+
+const loadFromLocalStorage = () => {
+  const data = localStorage.getItem(STORAGE_KEY);
+  if (data) {
+    try {
+      return JSON.parse(data);
+    } catch (error) {
+      console.error('Error loading from local storage:', error);
+      return null;
+    }
+  }
+  return null;
+};
+
 export default function MapView({ onBackToLanding }) {
   const [markers, setMarkers] = useState([]);
   const [polygons, setPolygons] = useState([]);
@@ -27,7 +48,28 @@ export default function MapView({ onBackToLanding }) {
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [mapProvider] = useState(() => MapProviderFactory.getProvider('google'));
+  const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef(null);
+
+  // Load saved data AFTER map is ready
+  React.useEffect(() => {
+    if (mapReady) {
+      const saved = loadFromLocalStorage();
+      if (saved && (saved.markers.length > 0 || saved.polygons.length > 0 || saved.circles.length > 0)) {
+        setMarkers(saved.markers);
+        setPolygons(saved.polygons);
+        setCircles(saved.circles);
+        console.log('📁 Loaded trip from storage:', saved);
+      }
+    }
+  }, [mapReady]);
+
+  // Auto-save to localStorage whenever data changes
+  React.useEffect(() => {
+    if (markers.length > 0 || polygons.length > 0 || circles.length > 0) {
+      saveToLocalStorage(markers, polygons, circles);
+    }
+  }, [markers, polygons, circles]);
 
   // Pan to location on Google Maps
   const panToLocation = (location) => {
@@ -110,7 +152,7 @@ export default function MapView({ onBackToLanding }) {
         lng: location.coords[1],
         name: location.name,
         type: location.type,
-        radius: 5000, // 5km default radius for location
+        radius: 2000, // 2km smaller default radius for location
       };
       setCircles([...circles, newCircle]);
     }
@@ -161,6 +203,16 @@ export default function MapView({ onBackToLanding }) {
     setCircles(circles.filter((circle) => circle.id !== id));
   };
 
+  const handleClearTrip = () => {
+    if (window.confirm('Are you sure you want to clear all locations? This cannot be undone.')) {
+      setMarkers([]);
+      setPolygons([]);
+      setCircles([]);
+      localStorage.removeItem(STORAGE_KEY);
+      console.log('🗑️ Trip cleared');
+    }
+  };
+
   return (
     <div className="map-view">
       <header className="map-header">
@@ -168,6 +220,11 @@ export default function MapView({ onBackToLanding }) {
           ← Back to Landing
         </button>
         <h1>My Travel Map</h1>
+        {markers.length + polygons.length + circles.length > 0 && (
+          <button className="clear-btn" onClick={handleClearTrip}>
+            🗑️ Clear Trip
+          </button>
+        )}
       </header>
 
       <div className="map-container">
@@ -265,11 +322,6 @@ export default function MapView({ onBackToLanding }) {
               </ul>
             )}
           </div>
-
-          <div className="info-box">
-            <h4>Tip</h4>
-            <p>Use the drawing tools on the map to trace your hiking routes and travel paths!</p>
-          </div>
         </div>
 
         <GoogleMapsDisplay
@@ -278,6 +330,7 @@ export default function MapView({ onBackToLanding }) {
           circles={circles}
           mapRef={mapRef}
           onPolygonComplete={handlePolygonComplete}
+          onMapLoaded={() => setMapReady(true)}
         />
       </div>
     </div>

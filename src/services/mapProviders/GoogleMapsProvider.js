@@ -1,5 +1,12 @@
 import { MapProvider } from './MapProvider';
 
+// Helper function to clean multilingual names (e.g., "ירושלים | القدس" -> "ירושלים")
+const cleanLocationName = (name) => {
+  if (!name) return name;
+  // Take only the first part before pipe character
+  return name.split('|')[0].trim();
+};
+
 /**
  * Google Maps Provider
  * Uses backend proxy to avoid CORS issues
@@ -120,7 +127,7 @@ export class GoogleMapsProvider extends MapProvider {
         
         return {
           id: Date.now(),
-          name: result.name || name,
+          name: cleanLocationName(result.name) || name,
           coords: polygonCoords,
         };
       }
@@ -147,7 +154,7 @@ export class GoogleMapsProvider extends MapProvider {
         
         return {
           id: Date.now(),
-          name: result.name || name,
+          name: cleanLocationName(result.name) || name,
           coords: polygonCoords,
         };
       }

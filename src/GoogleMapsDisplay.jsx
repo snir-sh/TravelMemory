@@ -3,6 +3,7 @@ import { GoogleMap, LoadScript, Marker, Polygon, Polyline, Circle } from '@react
 
 // Define outside component to prevent recreating on each render
 const GOOGLE_MAPS_LIBRARIES = ['places'];
+let isScriptLoaded = false;
 
 const mapContainerStyle = {
   width: '100%',
@@ -230,7 +231,7 @@ export default function GoogleMapsDisplay({
         libraries={GOOGLE_MAPS_LIBRARIES}
         onLoad={handleLoadSuccess}
         onError={handleLoadError}
-        preventScriptLoad={isGoogleMapsLoaded}
+        preventScriptLoad={isScriptLoaded}
       >
         <GoogleMap
           mapContainerStyle={mapContainerStyle}
