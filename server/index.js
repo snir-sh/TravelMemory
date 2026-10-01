@@ -104,18 +104,44 @@ app.get('/api/google/autocomplete', async (req, res) => {
 
     const data = await response.json();
 
-    if (!data.suggestions) {
+    if (!data.suggestions || data.suggestions.length === 0) {
       console.log('[GoogleMapsProvider] No suggestions returned');
       return res.json({ predictions: [] });
     }
 
-    // Transform predictions to match old format
-    const predictions = data.suggestions.slice(0, limit).map((suggestion) => ({
-      lat: suggestion.placePrediction?.location?.latitude || 0,
-      lon: suggestion.placePrediction?.location?.longitude || 0,
-      display_name: suggestion.placePrediction?.text?.text || suggestion.mainText || '',
-      place_id: suggestion.placePrediction?.placeId || '',
-    }));
+    // For each suggestion, we need to get coordinates via geocoding
+    const predictions = [];
+    
+    for (let i = 0; i < Math.min(data.suggestions.length, limit); i++) {
+      const suggestion = data.suggestions[i];
+      const placeText = suggestion.placePrediction?.text?.text || 
+                       suggestion.mainText || 
+                       suggestion.description || '';
+      
+      // Geocode to get coordinates
+      if (placeText) {
+        try {
+          const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(placeText)}&key=${apiKey}`;
+          const geocodeRes = await fetch(geocodeUrl);
+          const geocodeData = await geocodeRes.json();
+          
+          if (geocodeData.results && geocodeData.results.length > 0) {
+            const result = geocodeData.results[0];
+            const location = result.geometry.location;
+            
+            predictions.push({
+              lat: location.lat,
+              lon: location.lng,
+              display_name: result.formatted_address,
+              place_id: suggestion.placePrediction?.placeId || '',
+            });
+          }
+        } catch (error) {
+          console.error('Error geocoding suggestion:', error);
+          // Continue to next suggestion
+        }
+      }
+    }
 
     res.json({ predictions });
   } catch (error) {
@@ -190,7 +216,10 @@ app.get('/api/google/reverse-geocode', async (req, res) => {
 
     if (data.results && data.results.length > 0) {
       const result = data.results[0];
-      const bounds = result.geometry.bounds;
+      const geometry = result.geometry;
+      
+      // Try to get bounds, fallback to viewport if bounds not available
+      let bounds = geometry.bounds || geometry.viewport;
 
       if (bounds) {
         const ne = bounds.northeast;
