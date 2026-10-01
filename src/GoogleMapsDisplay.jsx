@@ -146,6 +146,9 @@ export default function GoogleMapsDisplay({
     setError(`Failed to load Google Maps: ${error?.message || 'Unknown error'}`);
   };
 
+  // Check if Google Maps is already loaded to prevent double-loading warnings in StrictMode
+  const isGoogleMapsLoaded = typeof window !== 'undefined' && window.google?.maps;
+
   if (!apiKey) {
     return (
       <div
@@ -196,6 +199,7 @@ export default function GoogleMapsDisplay({
       libraries={['drawing', 'places']}
       onLoad={handleLoadSuccess}
       onError={handleLoadError}
+      preventScriptLoad={isGoogleMapsLoaded}
     >
       <GoogleMap
         mapContainerStyle={mapContainerStyle}
