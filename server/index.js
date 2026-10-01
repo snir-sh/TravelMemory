@@ -318,6 +318,86 @@ app.get('/api/location-type', async (req, res) => {
   }
 });
 
+/**
+ * Get location type from Wikidata
+ * Queries Wikidata SPARQL API for settlement type (Kibbutz, Moshav, Village, etc.)
+ */
+app.get('/api/wikidata/settlement-type', async (req, res) => {
+  try {
+    const { name } = req.query;
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Missing name parameter' });
+    }
+
+    // Escape quotes for SPARQL
+    const escapedName = name.replace(/"/g, '\\"');
+    
+    // Query Wikidata SPARQL API - search by Hebrew or English label
+    const sparqlQuery = `
+      SELECT ?typeLabel WHERE {
+        ?item rdfs:label "${escapedName}"@he .
+        ?item wdt:P31 ?type .
+        SERVICE wikibase:label { bd:serviceParam wikibase:language "he" }
+      }
+      LIMIT 5
+    `;
+
+    const url = 'https://query.wikidata.org/sparql?query=' + encodeURIComponent(sparqlQuery) + '&format=json';
+    
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/sparql-results+json',
+        'User-Agent': 'TravelMemory-App (https://github.com/snir-sh/TravelMemory)',
+      },
+    });
+
+    const data = await response.json();
+
+    if (!data.results || data.results.bindings.length === 0) {
+      console.log('[Wikidata] No results found for:', name);
+      return res.json({ type: 'Place', source: 'wikidata' });
+    }
+
+    const binding = data.results.bindings[0];
+    let typeLabel = binding.typeLabel?.value || 'Place';
+
+    // Map Wikidata labels to our display types
+    const typeMapping = {
+      'קיבוץ': 'Kibbutz',
+      'מושב': 'Moshav',
+      'עיר': 'City',
+      'כפר': 'Village',
+      'עיר קטנה': 'Town',
+      'יישוב': 'Settlement',
+      'מקום מיושב': 'Settlement',
+      'כפר קולקטיבי': 'Kibbutz',
+      'כפר חקלאי': 'Moshav',
+    };
+
+    // Check for direct mapping
+    let displayType = typeMapping[typeLabel] || typeLabel;
+
+    // Also handle English labels if returned
+    const englishMapping = {
+      'kibbutz': 'Kibbutz',
+      'moshav': 'Moshav',
+      'city': 'City',
+      'village': 'Village',
+      'town': 'Town',
+      'settlement': 'Settlement',
+    };
+    
+    displayType = englishMapping[displayType.toLowerCase()] || displayType;
+
+    console.log('[Wikidata] Found type for', name, ':', displayType);
+    res.json({ type: displayType, source: 'wikidata' });
+  } catch (error) {
+    console.error('[Wikidata] Query error:', error);
+    res.json({ type: 'Place', source: 'wikidata', error: error.message });
+  }
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });

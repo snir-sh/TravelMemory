@@ -129,14 +129,15 @@ export default function MapView({ onBackToLanding }) {
       const colorIndex = polygons.length;
       const color = getColorForPolygon(colorIndex);
       
-      // Fetch real location type from Nominatim (async, non-blocking)
+      // Fetch real location type from Wikidata (async, non-blocking)
       let realType = location.type;
       try {
-        const typeRes = await fetch(`http://localhost:3001/api/location-type?name=${encodeURIComponent(location.name)}`);
+        const typeRes = await fetch(`http://localhost:3001/api/wikidata/settlement-type?name=${encodeURIComponent(location.name.split(',')[0])}`);
         const typeData = await typeRes.json();
         if (typeData.type) realType = typeData.type;
       } catch (e) {
         // Keep original type if lookup fails
+        console.log('Wikidata lookup failed, keeping type:', location.type);
       }
       
       if (Array.isArray(polygonData)) {
@@ -156,14 +157,15 @@ export default function MapView({ onBackToLanding }) {
 
     // Only add circle if no polygon was added
     if (!hasPolygon) {
-      // Fetch real location type from Nominatim
+      // Fetch real location type from Wikidata
       let realType = location.type;
       try {
-        const typeRes = await fetch(`http://localhost:3001/api/location-type?name=${encodeURIComponent(location.name)}`);
+        const typeRes = await fetch(`http://localhost:3001/api/wikidata/settlement-type?name=${encodeURIComponent(location.name.split(',')[0])}`);
         const typeData = await typeRes.json();
         if (typeData.type) realType = typeData.type;
       } catch (e) {
         // Keep original type if lookup fails
+        console.log('Wikidata lookup failed, keeping type:', location.type);
       }
       
       const newCircle = {
