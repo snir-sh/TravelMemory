@@ -1,4 +1,5 @@
 require('dotenv').config();
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
@@ -69,15 +70,17 @@ app.get('/api/nominatim/search', async (req, res) => {
 });
 
 /**
- * Proxy endpoint for Google Maps Places Autocomplete
+ * Proxy endpoint for Google Maps Places Autocomplete (New)
+ * Uses the new Places API instead of deprecated legacy API
  * Avoids CORS issues by proxying through backend
  */
 app.get('/api/google/autocomplete', async (req, res) => {
   try {
     const { input, limit = 5 } = req.query;
-    const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+    const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
 
     if (!apiKey) {
+      console.error('[Backend] Google Maps API key not found in environment');
       return res.status(500).json({ error: 'Google Maps API key not configured' });
     }
 
@@ -85,47 +88,39 @@ app.get('/api/google/autocomplete', async (req, res) => {
       return res.status(400).json({ error: 'Missing input parameter' });
     }
 
-    const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
-      input
-    )}&key=${apiKey}`;
+    // Use new Places API with sessionToken for better performance
+    const url = `https://places.googleapis.com/v1/places:autocomplete`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': apiKey,
+      },
+      body: JSON.stringify({
+        input: input,
+      }),
+    });
 
-    const response = await fetch(url);
     const data = await response.json();
 
-    // Return predictions
-    if (!data.predictions) {
+    if (!data.suggestions) {
+      console.log('[GoogleMapsProvider] No suggestions returned');
       return res.json({ predictions: [] });
     }
 
-    // Fetch details for each prediction to get coordinates
-    const predictions = await Promise.all(
-      data.predictions.slice(0, limit).map(async (prediction) => {
-        try {
-          const detailUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${prediction.place_id}&fields=geometry,formatted_address&key=${apiKey}`;
-          const detailResponse = await fetch(detailUrl);
-          const detailData = await detailResponse.json();
+    // Transform predictions to match old format
+    const predictions = data.suggestions.slice(0, limit).map((suggestion) => ({
+      lat: suggestion.placePrediction?.location?.latitude || 0,
+      lon: suggestion.placePrediction?.location?.longitude || 0,
+      display_name: suggestion.placePrediction?.text?.text || suggestion.mainText || '',
+      place_id: suggestion.placePrediction?.placeId || '',
+    }));
 
-          if (detailData.result && detailData.result.geometry) {
-            const location = detailData.result.geometry.location;
-            return {
-              lat: location.lat,
-              lon: location.lng,
-              display_name: prediction.description,
-              place_id: prediction.place_id,
-            };
-          }
-          return null;
-        } catch (error) {
-          console.error('Error fetching place details:', error);
-          return null;
-        }
-      })
-    );
-
-    res.json({ predictions: predictions.filter((p) => p !== null) });
+    res.json({ predictions });
   } catch (error) {
     console.error('Google Maps autocomplete error:', error);
-    res.status(500).json({ error: 'Failed to fetch from Google Maps' });
+    res.status(500).json({ error: 'Failed to fetch from Google Maps', details: error.message });
   }
 });
 
@@ -136,7 +131,7 @@ app.get('/api/google/autocomplete', async (req, res) => {
 app.get('/api/google/geocode', async (req, res) => {
   try {
     const { address } = req.query;
-    const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+    const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
 
     if (!apiKey) {
       return res.status(500).json({ error: 'Google Maps API key not configured' });
@@ -178,7 +173,7 @@ app.get('/api/google/geocode', async (req, res) => {
 app.get('/api/google/reverse-geocode', async (req, res) => {
   try {
     const { lat, lon } = req.query;
-    const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY;
+    const apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
 
     if (!apiKey) {
       return res.status(500).json({ error: 'Google Maps API key not configured' });
