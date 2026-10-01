@@ -117,6 +117,14 @@ export default function MapView({ onBackToLanding }) {
     }
   };
 
+  const handlePolygonComplete = (newPolygon) => {
+    setPolygons([...polygons, newPolygon]);
+    // Pan to the new polygon
+    panToLocation({
+      coords: [newPolygon.coords[0][0], newPolygon.coords[0][1]],
+    });
+  };
+
   const handleDelete = (id) => {
     setMarkers(markers.filter((marker) => marker.id !== id));
     setPolygons(polygons.filter((polygon) => polygon.id !== id));
@@ -210,6 +218,7 @@ export default function MapView({ onBackToLanding }) {
           markers={markers}
           polygons={polygons}
           mapRef={mapRef}
+          onPolygonComplete={handlePolygonComplete}
         />
       </div>
     </div>
