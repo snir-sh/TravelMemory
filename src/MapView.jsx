@@ -129,29 +129,49 @@ export default function MapView({ onBackToLanding }) {
       const colorIndex = polygons.length;
       const color = getColorForPolygon(colorIndex);
       
+      // Fetch real location type from Nominatim (async, non-blocking)
+      let realType = location.type;
+      try {
+        const typeRes = await fetch(`http://localhost:3001/api/location-type?name=${encodeURIComponent(location.name)}`);
+        const typeData = await typeRes.json();
+        if (typeData.type) realType = typeData.type;
+      } catch (e) {
+        // Keep original type if lookup fails
+      }
+      
       if (Array.isArray(polygonData)) {
         // Multiple polygons (MultiPolygon)
         const coloredPolygons = polygonData.map((poly) => ({
           ...poly,
           color,
-          type: location.type,
+          type: realType,
         }));
         setPolygons([...polygons, ...coloredPolygons]);
       } else {
         // Single polygon
-        setPolygons([...polygons, { ...polygonData, color, type: location.type }]);
+        setPolygons([...polygons, { ...polygonData, color, type: realType }]);
       }
       hasPolygon = true;
     }
 
     // Only add circle if no polygon was added
     if (!hasPolygon) {
+      // Fetch real location type from Nominatim
+      let realType = location.type;
+      try {
+        const typeRes = await fetch(`http://localhost:3001/api/location-type?name=${encodeURIComponent(location.name)}`);
+        const typeData = await typeRes.json();
+        if (typeData.type) realType = typeData.type;
+      } catch (e) {
+        // Keep original type if lookup fails
+      }
+      
       const newCircle = {
         id: Date.now(),
         lat: location.coords[0],
         lng: location.coords[1],
         name: location.name,
-        type: location.type,
+        type: realType,
         radius: 2000, // 2km smaller default radius for location
       };
       setCircles([...circles, newCircle]);

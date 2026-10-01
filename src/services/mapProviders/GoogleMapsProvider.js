@@ -101,14 +101,9 @@ export class GoogleMapsProvider extends MapProvider {
 
       const result = data[0];
       
-      // Only use results that are administrative areas or boundaries
-      if (result.class !== 'boundary' && result.type !== 'administrative') {
-        console.warn('[GoogleMapsProvider] Result is not an administrative boundary, will use circle');
-        return null;
-      }
-
-      if (!result.geojson) {
-        console.warn('[GoogleMapsProvider] No GeoJSON in search result');
+      // Check if result has a polygon geometry
+      if (!result.geojson || (result.geojson.type !== 'Polygon' && result.geojson.type !== 'MultiPolygon')) {
+        console.warn('[GoogleMapsProvider] No polygon geometry found, will use circle');
         return null;
       }
 

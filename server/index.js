@@ -127,7 +127,7 @@ app.get('/api/google/autocomplete', async (req, res) => {
             const result = geocodeData.results[0];
             const location = result.geometry.location;
             
-            // Extract location type from address components
+            // Use generic 'Place' type for autocomplete - will get real type from Nominatim when added
             let locationType = 'Place';
             if (result.address_components && result.address_components.length > 0) {
               const firstComponent = result.address_components[0];
@@ -139,18 +139,12 @@ app.get('/api/google/autocomplete', async (req, res) => {
                 locationType = 'State/Province';
               } else if (allTypes.includes('administrative_area_level_2')) {
                 locationType = 'Region';
+              } else if (allTypes.includes('administrative_area_level_3')) {
+                locationType = 'District';
               } else if (allTypes.includes('locality')) {
                 locationType = 'City';
               } else if (allTypes.includes('postal_town')) {
                 locationType = 'Town';
-              } else if (allTypes.includes('neighborhood')) {
-                locationType = 'Neighborhood';
-              } else if (allTypes.includes('sublocality')) {
-                locationType = 'Neighborhood';
-              } else if (allTypes.includes('premise')) {
-                locationType = 'Place';
-              } else if (allTypes.includes('point_of_interest')) {
-                locationType = 'POI';
               }
             }
             
@@ -270,6 +264,57 @@ app.get('/api/google/reverse-geocode', async (req, res) => {
   } catch (error) {
     console.error('Google Maps reverse geocoding error:', error);
     res.status(500).json({ error: 'Failed to fetch from Google Maps' });
+  }
+});
+
+/**
+ * Get location type from Nominatim
+ * Maps Nominatim type to human-readable label
+ */
+app.get('/api/location-type', async (req, res) => {
+  try {
+    const { name } = req.query;
+    
+    if (!name) {
+      return res.status(400).json({ error: 'Missing name parameter' });
+    }
+    
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=1`;
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'TravelMemory-App (https://github.com/snir-sh/TravelMemory)',
+      },
+    });
+    
+    const data = await response.json();
+    
+    if (!data || data.length === 0) {
+      return res.json({ type: 'Place' });
+    }
+    
+    const result = data[0];
+    const osmType = result.type || '';
+    
+    // Map Nominatim types to display labels
+    let locationType = 'Place';
+    if (osmType === 'country') locationType = 'Country';
+    else if (osmType === 'state') locationType = 'State/Province';
+    else if (osmType === 'province') locationType = 'Province';
+    else if (osmType === 'region') locationType = 'Region';
+    else if (osmType === 'county') locationType = 'County';
+    else if (osmType === 'district') locationType = 'District';
+    else if (osmType === 'city') locationType = 'City';
+    else if (osmType === 'town') locationType = 'Town';
+    else if (osmType === 'village') locationType = 'Village';
+    else if (osmType === 'hamlet') locationType = 'Hamlet';
+    else if (osmType === 'settlement') locationType = 'Settlement';
+    else if (osmType === 'kibbutz') locationType = 'Kibbutz';
+    else if (osmType === 'moshav') locationType = 'Moshav';
+    
+    res.json({ type: locationType });
+  } catch (error) {
+    console.error('Location type lookup error:', error);
+    res.json({ type: 'Place' });
   }
 });
 
