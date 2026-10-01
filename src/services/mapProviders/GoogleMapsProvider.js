@@ -72,9 +72,12 @@ export class GoogleMapsProvider extends MapProvider {
 
   async fetchPolygonBoundary(lat, lon, name) {
     try {
-      console.log('[GoogleMapsProvider] Fetching polygon via proxy:', name);
+      console.log('[GoogleMapsProvider] Fetching polygon boundary via Nominatim:', name);
+      
+      // Use Nominatim proxy for actual boundary polygons
+      const nominatimUrl = 'http://localhost:3001/api/nominatim/reverse';
       const response = await fetch(
-        `${this.apiBaseUrl}/reverse-geocode?lat=${lat}&lon=${lon}`
+        `${nominatimUrl}?lat=${lat}&lon=${lon}&zoom=10`
       );
 
       if (!response.ok) {
@@ -83,16 +86,34 @@ export class GoogleMapsProvider extends MapProvider {
 
       const data = await response.json();
 
-      if (data.error) {
-        console.warn('[GoogleMapsProvider] Polygon fetch error:', data.error);
-        return null;
+      // Check if we got a polygon from Nominatim
+      if (data.geojson && data.geojson.type === 'Polygon') {
+        const coordinates = data.geojson.coordinates[0];
+        // Nominatim returns [lon, lat], we need [lat, lon]
+        const polygonCoords = coordinates.map(coord => [coord[1], coord[0]]);
+        
+        return {
+          id: Date.now(),
+          name: data.name || name,
+          coords: polygonCoords,
+        };
       }
 
-      return {
-        id: Date.now(),
-        name: data.name || name,
-        coords: data.coords,
-      };
+      if (data.geojson && data.geojson.type === 'MultiPolygon') {
+        // Handle MultiPolygon - use the first polygon
+        const coordinates = data.geojson.coordinates[0][0];
+        const polygonCoords = coordinates.map(coord => [coord[1], coord[0]]);
+        
+        return {
+          id: Date.now(),
+          name: data.name || name,
+          coords: polygonCoords,
+        };
+      }
+
+      // No polygon found - return null so MapView can draw a circle instead
+      console.warn('[GoogleMapsProvider] No polygon boundary found, will use circle fallback');
+      return null;
     } catch (error) {
       console.error('[GoogleMapsProvider] Polygon fetch error:', error);
       return null;

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { GoogleMap, LoadScript, Marker, Polygon, Polyline } from '@react-google-maps/api';
+import { GoogleMap, LoadScript, Marker, Polygon, Polyline, Circle } from '@react-google-maps/api';
 
 // Define outside component to prevent recreating on each render
 const GOOGLE_MAPS_LIBRARIES = ['places'];
@@ -18,6 +18,7 @@ const defaultCenter = {
 export default function GoogleMapsDisplay({
   markers,
   polygons,
+  circles,
   onPolygonComplete,
   onMapLoaded,
   mapRef,
@@ -267,6 +268,25 @@ export default function GoogleMapsDisplay({
                 strokeWeight: 2,
               }}
               title={polygon.name}
+            />
+          ))}
+
+          {/* Render location circles (fallback when no polygon boundary found) */}
+          {circles.map((circle) => (
+            <Circle
+              key={circle.id}
+              center={{
+                lat: circle.lat,
+                lng: circle.lng,
+              }}
+              radius={circle.radius}
+              options={{
+                fillColor: '#ff9800',
+                fillOpacity: 0.25,
+                strokeColor: '#ff9800',
+                strokeWeight: 2,
+              }}
+              title={circle.name}
             />
           ))}
 

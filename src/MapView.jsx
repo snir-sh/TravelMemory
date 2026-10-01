@@ -6,6 +6,7 @@ import './MapView.css';
 export default function MapView({ onBackToLanding }) {
   const [markers, setMarkers] = useState([]);
   const [polygons, setPolygons] = useState([]);
+  const [circles, setCircles] = useState([]);
   const [locationInput, setLocationInput] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -76,13 +77,16 @@ export default function MapView({ onBackToLanding }) {
       hasPolygon = true;
     }
 
-    // Only add marker if no polygon was added
+    // Only add circle if no polygon was added
     if (!hasPolygon) {
-      const newMarker = {
+      const newCircle = {
         id: Date.now(),
-        ...location,
+        lat: location.coords[0],
+        lng: location.coords[1],
+        name: location.name,
+        radius: 5000, // 5km default radius for location
       };
-      setMarkers([...markers, newMarker]);
+      setCircles([...circles, newCircle]);
     }
 
     setLocationInput('');
@@ -128,6 +132,7 @@ export default function MapView({ onBackToLanding }) {
   const handleDelete = (id) => {
     setMarkers(markers.filter((marker) => marker.id !== id));
     setPolygons(polygons.filter((polygon) => polygon.id !== id));
+    setCircles(circles.filter((circle) => circle.id !== id));
   };
 
   return (
@@ -175,8 +180,8 @@ export default function MapView({ onBackToLanding }) {
           </div>
 
           <div className="markers-list">
-            <h3>Locations ({markers.length + polygons.length})</h3>
-            {markers.length === 0 && polygons.length === 0 ? (
+            <h3>Locations ({markers.length + polygons.length + circles.length})</h3>
+            {markers.length === 0 && polygons.length === 0 && circles.length === 0 ? (
               <p className="empty-state">
                 No locations yet. Add one to get started!
               </p>
@@ -184,7 +189,7 @@ export default function MapView({ onBackToLanding }) {
               <ul>
                 {polygons.map((polygon) => (
                   <li key={polygon.id} className="marker-item polygon-item">
-                    <span>📍 {polygon.name}</span>
+                    <span>🗺️ {polygon.name}</span>
                     <button
                       onClick={() => handleDelete(polygon.id)}
                       className="delete-btn"
@@ -193,9 +198,20 @@ export default function MapView({ onBackToLanding }) {
                     </button>
                   </li>
                 ))}
+                {circles.map((circle) => (
+                  <li key={circle.id} className="marker-item circle-item">
+                    <span>⭕ {circle.name}</span>
+                    <button
+                      onClick={() => handleDelete(circle.id)}
+                      className="delete-btn"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
                 {markers.map((marker) => (
                   <li key={marker.id} className="marker-item">
-                    <span>{marker.name}</span>
+                    <span>📍 {marker.name}</span>
                     <button
                       onClick={() => handleDelete(marker.id)}
                       className="delete-btn"
@@ -217,6 +233,7 @@ export default function MapView({ onBackToLanding }) {
         <GoogleMapsDisplay
           markers={markers}
           polygons={polygons}
+          circles={circles}
           mapRef={mapRef}
           onPolygonComplete={handlePolygonComplete}
         />

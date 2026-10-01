@@ -194,12 +194,21 @@
   background: #f0f2f7;
 }
 
+.marker-item.circle-item {
+  border-left-color: #ff9800;
+  background: #fff3e0;
+}
+
 .marker-item:hover {
   background: #f0f2f7;
 }
 
 .marker-item.polygon-item:hover {
   background: #e8ebf5;
+}
+
+.marker-item.circle-item:hover {
+  background: #ffe0b2;
 }
 
 .marker-item span {
