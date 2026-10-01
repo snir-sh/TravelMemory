@@ -262,9 +262,9 @@ export default function GoogleMapsDisplay({
                 lng: coord[1],
               }))}
               options={{
-                fillColor: '#667eea',
+                fillColor: polygon.color || '#667eea',
                 fillOpacity: 0.3,
-                strokeColor: '#667eea',
+                strokeColor: polygon.color || '#667eea',
                 strokeWeight: 2,
               }}
               title={polygon.name}

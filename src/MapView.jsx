@@ -3,6 +3,22 @@ import GoogleMapsDisplay from './GoogleMapsDisplay';
 import { MapProviderFactory } from './services/mapProviders';
 import './MapView.css';
 
+// Color palette for different locations
+const COLOR_PALETTE = [
+  '#667eea', // Blue
+  '#ff6b6b', // Red
+  '#51cf66', // Green
+  '#ffd93d', // Yellow
+  '#6bcf7f', // Mint
+  '#ff922b', // Orange
+  '#d946ef', // Purple
+  '#06b6d4', // Cyan
+  '#ec4899', // Pink
+  '#f59e0b', // Amber
+];
+
+const getColorForPolygon = (index) => COLOR_PALETTE[index % COLOR_PALETTE.length];
+
 export default function MapView({ onBackToLanding }) {
   const [markers, setMarkers] = useState([]);
   const [polygons, setPolygons] = useState([]);
@@ -67,12 +83,19 @@ export default function MapView({ onBackToLanding }) {
     );
 
     if (polygonData) {
+      const colorIndex = polygons.length;
+      const color = getColorForPolygon(colorIndex);
+      
       if (Array.isArray(polygonData)) {
         // Multiple polygons (MultiPolygon)
-        setPolygons([...polygons, ...polygonData]);
+        const coloredPolygons = polygonData.map((poly) => ({
+          ...poly,
+          color,
+        }));
+        setPolygons([...polygons, ...coloredPolygons]);
       } else {
         // Single polygon
-        setPolygons([...polygons, polygonData]);
+        setPolygons([...polygons, { ...polygonData, color }]);
       }
       hasPolygon = true;
     }
@@ -188,7 +211,11 @@ export default function MapView({ onBackToLanding }) {
             ) : (
               <ul>
                 {polygons.map((polygon) => (
-                  <li key={polygon.id} className="marker-item polygon-item">
+                  <li
+                    key={polygon.id}
+                    className="marker-item polygon-item"
+                    style={{ borderLeftColor: polygon.color || '#667eea' }}
+                  >
                     <span>🗺️ {polygon.name}</span>
                     <button
                       onClick={() => handleDelete(polygon.id)}
