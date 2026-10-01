@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { GoogleMap, LoadScript, Marker, Polygon, Polyline } from '@react-google-maps/api';
 
+// Define outside component to prevent recreating on each render
+const GOOGLE_MAPS_LIBRARIES = ['places'];
+
 const mapContainerStyle = {
   width: '100%',
   height: '100%',
@@ -223,7 +226,7 @@ export default function GoogleMapsDisplay({
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <LoadScript
         googleMapsApiKey={apiKey}
-        libraries={['places']}
+        libraries={GOOGLE_MAPS_LIBRARIES}
         onLoad={handleLoadSuccess}
         onError={handleLoadError}
         preventScriptLoad={isGoogleMapsLoaded}
