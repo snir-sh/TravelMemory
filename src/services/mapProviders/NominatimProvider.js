@@ -2,9 +2,14 @@ import { MapProvider } from './MapProvider';
 
 /**
  * Nominatim + Open-Meteo Map Provider
- * Uses Open-Meteo for autocomplete and Nominatim for reverse geocoding
+ * Uses Open-Meteo for autocomplete and local proxy for polygon fetching
  */
 export class NominatimProvider extends MapProvider {
+  constructor(proxyUrl = 'http://localhost:3001') {
+    super();
+    this.proxyUrl = proxyUrl;
+  }
+
   getName() {
     return 'Nominatim';
   }
@@ -61,9 +66,36 @@ export class NominatimProvider extends MapProvider {
   }
 
   async fetchPolygonBoundary(lat, lon, name) {
-    // TODO: Implement polygon fetching
-    // This would require a backend proxy due to CORS
-    return null;
+    try {
+      const response = await fetch(
+        `${this.proxyUrl}/api/nominatim/reverse?lat=${lat}&lon=${lon}&zoom=10`
+      );
+      const data = await response.json();
+
+      if (data.geojson) {
+        if (data.geojson.type === 'Polygon') {
+          const polygonCoords = data.geojson.coordinates[0].map((coord) => [
+            coord[1],
+            coord[0],
+          ]);
+          return {
+            id: Date.now(),
+            name: name,
+            coords: polygonCoords,
+          };
+        } else if (data.geojson.type === 'MultiPolygon') {
+          return data.geojson.coordinates.map((polygon, index) => ({
+            id: Date.now() + index,
+            name: name,
+            coords: polygon[0].map((coord) => [coord[1], coord[0]]),
+          }));
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Polygon fetch error:', error);
+      return null;
+    }
   }
 }
 

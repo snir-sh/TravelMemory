@@ -3,8 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "concurrently": "^10.0.5",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.49.0",
+    "node-fetch": "^2.7.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-leaflet": "^5.0.0",
@@ -12,7 +16,9 @@
     "react-scripts": "5.0.1"
   },
   "scripts": {
+    "server": "node server/index.js",
     "start": "react-scripts start",
+    "dev": "concurrently \"npm run server\" \"npm start\"",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"

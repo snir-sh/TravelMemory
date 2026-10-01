@@ -4,11 +4,16 @@ import { GoogleMapsProvider } from './GoogleMapsProvider';
 /**
  * Map Provider Factory
  * Easily switch between different providers
+ * 
+ * Available providers:
+ * - nominatim: Free (Open-Meteo + local proxy)
+ * - google: Google Maps (requires API key in REACT_APP_GOOGLE_MAPS_API_KEY)
  */
 export const MapProviderFactory = {
   providers: {
     nominatim: new NominatimProvider(),
-    // google: new GoogleMapsProvider(process.env.REACT_APP_GOOGLE_MAPS_API_KEY),
+    // Uncomment and add API key to enable Google Maps
+    // google: new GoogleMapsProvider(),
   },
 
   /**

@@ -68,12 +68,34 @@ export default function MapView({ onBackToLanding }) {
       name: suggestion.display_name,
     };
 
-    // Add marker
-    const newMarker = {
-      id: Date.now(),
-      ...location,
-    };
-    setMarkers([...markers, newMarker]);
+    let hasPolygon = false;
+
+    // Try to fetch polygon boundary
+    const polygonData = await fetchPolygonBoundary(
+      suggestion.lat,
+      suggestion.lon,
+      suggestion.display_name
+    );
+
+    if (polygonData) {
+      if (Array.isArray(polygonData)) {
+        // Multiple polygons (MultiPolygon)
+        setPolygons([...polygons, ...polygonData]);
+      } else {
+        // Single polygon
+        setPolygons([...polygons, polygonData]);
+      }
+      hasPolygon = true;
+    }
+
+    // Only add marker if no polygon was added
+    if (!hasPolygon) {
+      const newMarker = {
+        id: Date.now(),
+        ...location,
+      };
+      setMarkers([...markers, newMarker]);
+    }
 
     setLocationInput('');
     setSuggestions([]);

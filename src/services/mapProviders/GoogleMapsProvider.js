@@ -3,13 +3,17 @@ import { MapProvider } from './MapProvider';
 /**
  * Google Maps Provider
  * Uses Google Maps API for search, geocoding, and boundary fetching
+ * 
+ * Requires REACT_APP_GOOGLE_MAPS_API_KEY environment variable
  */
 export class GoogleMapsProvider extends MapProvider {
-  constructor(apiKey) {
+  constructor(apiKey = process.env.REACT_APP_GOOGLE_MAPS_API_KEY) {
     super();
     this.apiKey = apiKey;
     if (!apiKey) {
-      console.warn('GoogleMapsProvider: No API key provided');
+      console.warn(
+        'GoogleMapsProvider: No API key provided. Set REACT_APP_GOOGLE_MAPS_API_KEY environment variable.'
+      );
     }
   }
 
@@ -17,12 +21,19 @@ export class GoogleMapsProvider extends MapProvider {
     return 'Google Maps';
   }
 
-  async searchLocations(query, limit = 5) {
+  _checkApiKey() {
     if (!this.apiKey) {
-      throw new Error('Google Maps API key not configured');
+      throw new Error(
+        'Google Maps API key not configured. Set REACT_APP_GOOGLE_MAPS_API_KEY environment variable.'
+      );
     }
+  }
+
+  async searchLocations(query, limit = 5) {
+    this._checkApiKey();
 
     try {
+      // Use Places API Autocomplete
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
           query
@@ -30,27 +41,37 @@ export class GoogleMapsProvider extends MapProvider {
       );
       const data = await response.json();
 
-      if (data.predictions) {
-        // For each prediction, get place details to get coordinates
-        const results = await Promise.all(
-          data.predictions.slice(0, limit).map(async (prediction) => {
+      if (!data.predictions) {
+        return [];
+      }
+
+      // Get details for each prediction to fetch coordinates
+      const results = await Promise.all(
+        data.predictions.slice(0, limit).map(async (prediction) => {
+          try {
             const detailResponse = await fetch(
-              `https://maps.googleapis.com/maps/api/place/details/json?place_id=${prediction.place_id}&fields=geometry&key=${this.apiKey}`
+              `https://maps.googleapis.com/maps/api/place/details/json?place_id=${prediction.place_id}&fields=geometry,formatted_address&key=${this.apiKey}`
             );
             const detailData = await detailResponse.json();
-            const location = detailData.result.geometry.location;
 
-            return {
-              lat: location.lat,
-              lon: location.lng,
-              display_name: prediction.description,
-              place_id: prediction.place_id,
-            };
-          })
-        );
-        return results;
-      }
-      return [];
+            if (detailData.result && detailData.result.geometry) {
+              const location = detailData.result.geometry.location;
+              return {
+                lat: location.lat,
+                lon: location.lng,
+                display_name: prediction.description,
+                place_id: prediction.place_id,
+              };
+            }
+            return null;
+          } catch (error) {
+            console.error('Error fetching place details:', error);
+            return null;
+          }
+        })
+      );
+
+      return results.filter((r) => r !== null);
     } catch (error) {
       console.error('Google Maps search error:', error);
       return [];
@@ -58,9 +79,7 @@ export class GoogleMapsProvider extends MapProvider {
   }
 
   async geocodeLocation(locationName) {
-    if (!this.apiKey) {
-      throw new Error('Google Maps API key not configured');
-    }
+    this._checkApiKey();
 
     try {
       const response = await fetch(
@@ -87,14 +106,45 @@ export class GoogleMapsProvider extends MapProvider {
   }
 
   async fetchPolygonBoundary(lat, lon, name) {
-    if (!this.apiKey) {
-      throw new Error('Google Maps API key not configured');
-    }
+    this._checkApiKey();
 
-    // TODO: Implement polygon fetching using Places API
-    // Google Maps doesn't provide boundary polygons directly
-    // Would need to use a separate service or pre-computed data
-    return null;
+    try {
+      // Use reverse geocoding to get place information
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${this.apiKey}`
+      );
+      const data = await response.json();
+
+      if (data.results && data.results.length > 0) {
+        // Find the most precise administrative area (usually the city)
+        const result = data.results[0];
+        const bounds = result.geometry.bounds;
+
+        if (bounds) {
+          // Convert bounds rectangle to polygon coordinates
+          const ne = bounds.northeast;
+          const sw = bounds.southwest;
+
+          const polygonCoords = [
+            [sw.lat, sw.lng],
+            [ne.lat, sw.lng],
+            [ne.lat, ne.lng],
+            [sw.lat, ne.lng],
+            [sw.lat, sw.lng], // Close the polygon
+          ];
+
+          return {
+            id: Date.now(),
+            name: name || result.formatted_address,
+            coords: polygonCoords,
+          };
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Google Maps polygon fetch error:', error);
+      return null;
+    }
   }
 }
 
