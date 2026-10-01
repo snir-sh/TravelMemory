@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import GoogleMapsDisplay from './GoogleMapsDisplay';
 import { MapProviderFactory } from './services/mapProviders';
 import './MapView.css';

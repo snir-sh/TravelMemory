@@ -20,6 +20,8 @@ export default function GoogleMapsDisplay({
 }) {
   // ALL HOOKS FIRST - before any conditional logic
   const [map, setMap] = useState(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [error, setError] = useState(null);
   const drawingManagerRef = useRef(null);
   const drawnShapesRef = useRef([]);
   const isInitializedRef = useRef(false);
@@ -28,93 +30,121 @@ export default function GoogleMapsDisplay({
 
   // Memoize handleMapLoad to prevent unnecessary re-renders
   const handleMapLoad = useCallback((mapInstance) => {
-    // Guard against multiple initializations
-    if (isInitializedRef.current) {
-      return;
-    }
-    isInitializedRef.current = true;
-
-    setMap(mapInstance);
-    if (mapRef) {
-      mapRef.current = mapInstance;
-    }
-
-    // Initialize drawing manager only once
-    if (!window.google?.maps?.drawing?.DrawingManager) {
-      return;
-    }
-
-    const drawingManager = new window.google.maps.drawing.DrawingManager({
-      drawingMode: null,
-      drawingControl: true,
-      drawingControlOptions: {
-        position: window.google.maps.ControlPosition.TOP_RIGHT,
-        drawingModes: [
-          window.google.maps.drawing.OverlayType.POLYLINE,
-          window.google.maps.drawing.OverlayType.POLYGON,
-          window.google.maps.drawing.OverlayType.RECTANGLE,
-        ],
-      },
-      polylineOptions: {
-        editable: true,
-        strokeColor: '#667eea',
-        strokeWeight: 3,
-      },
-      polygonOptions: {
-        editable: true,
-        fillColor: '#667eea',
-        fillOpacity: 0.3,
-        strokeColor: '#667eea',
-        strokeWeight: 2,
-      },
-      rectangleOptions: {
-        editable: true,
-        fillColor: '#667eea',
-        fillOpacity: 0.3,
-        strokeColor: '#667eea',
-        strokeWeight: 2,
-      },
-    });
-
-    drawingManager.setMap(mapInstance);
-    drawingManagerRef.current = drawingManager;
-    drawnShapesRef.current = [];
-
-    // Handle completed shapes
-    window.google.maps.event.addListener(
-      drawingManager,
-      'overlaycomplete',
-      (e) => {
-        drawnShapesRef.current.push(e.overlay);
-        // Switch back to hand tool
-        drawingManager.setDrawingMode(null);
+    try {
+      // Guard against multiple initializations
+      if (isInitializedRef.current) {
+        console.log('[GoogleMapsDisplay] Map already initialized, skipping');
+        return;
       }
-    );
+      isInitializedRef.current = true;
 
-    if (onMapLoaded) {
-      onMapLoaded(mapInstance);
+      console.log('[GoogleMapsDisplay] Map loaded, initializing...');
+      setMap(mapInstance);
+      if (mapRef) {
+        mapRef.current = mapInstance;
+      }
+
+      // Check if Google Maps drawing API is available
+      if (!window.google?.maps?.drawing?.DrawingManager) {
+        console.warn('[GoogleMapsDisplay] Drawing Manager not available');
+        if (onMapLoaded) {
+          onMapLoaded(mapInstance);
+        }
+        return;
+      }
+
+      // Initialize drawing manager only once
+      const drawingManager = new window.google.maps.drawing.DrawingManager({
+        drawingMode: null,
+        drawingControl: true,
+        drawingControlOptions: {
+          position: window.google.maps.ControlPosition.TOP_RIGHT,
+          drawingModes: [
+            window.google.maps.drawing.OverlayType.POLYLINE,
+            window.google.maps.drawing.OverlayType.POLYGON,
+            window.google.maps.drawing.OverlayType.RECTANGLE,
+          ],
+        },
+        polylineOptions: {
+          editable: true,
+          strokeColor: '#667eea',
+          strokeWeight: 3,
+        },
+        polygonOptions: {
+          editable: true,
+          fillColor: '#667eea',
+          fillOpacity: 0.3,
+          strokeColor: '#667eea',
+          strokeWeight: 2,
+        },
+        rectangleOptions: {
+          editable: true,
+          fillColor: '#667eea',
+          fillOpacity: 0.3,
+          strokeColor: '#667eea',
+          strokeWeight: 2,
+        },
+      });
+
+      drawingManager.setMap(mapInstance);
+      drawingManagerRef.current = drawingManager;
+      drawnShapesRef.current = [];
+
+      // Handle completed shapes
+      window.google.maps.event.addListener(
+        drawingManager,
+        'overlaycomplete',
+        (e) => {
+          console.log('[GoogleMapsDisplay] Shape drawn');
+          drawnShapesRef.current.push(e.overlay);
+          // Switch back to hand tool
+          drawingManager.setDrawingMode(null);
+        }
+      );
+
+      console.log('[GoogleMapsDisplay] Map fully initialized');
+      if (onMapLoaded) {
+        onMapLoaded(mapInstance);
+      }
+    } catch (err) {
+      console.error('[GoogleMapsDisplay] Error during map load:', err);
+      setError(err.message);
     }
   }, [mapRef, onMapLoaded]);
 
   // When markers change, pan to the latest one if it's the first or only location
   useEffect(() => {
-    if ((markers.length > 0 || polygons.length > 0) && map) {
-      if (markers.length > 0) {
-        const lastMarker = markers[markers.length - 1];
-        if (map.panTo) {
-          map.panTo({ lat: lastMarker.coords[0], lng: lastMarker.coords[1] });
-          map.setZoom(12);
+    if ((markers.length > 0 || polygons.length > 0) && map && isLoaded) {
+      try {
+        if (markers.length > 0) {
+          const lastMarker = markers[markers.length - 1];
+          if (map.panTo) {
+            map.panTo({ lat: lastMarker.coords[0], lng: lastMarker.coords[1] });
+            map.setZoom(12);
+          }
+        } else if (polygons.length > 0) {
+          const lastPolygon = polygons[polygons.length - 1];
+          // Center on first coordinate of polygon
+          if (map.panTo && lastPolygon.coords[0]) {
+            map.panTo({ lat: lastPolygon.coords[0][0], lng: lastPolygon.coords[0][1] });
+            map.setZoom(12);
+          }
         }
-      } else if (polygons.length > 0) {
-        const lastPolygon = polygons[polygons.length - 1];
-        // Center on first coordinate of polygon
-        if (map.panTo && lastPolygon.coords[0]) {
-          map.panTo({ lat: lastPolygon.coords[0][0], lng: lastPolygon.coords[0][1] });
-          map.setZoom(12);
-        }
+      } catch (err) {
+        console.error('[GoogleMapsDisplay] Error panning to location:', err);
       }
     }
-  }, [markers.length, polygons.length, map]);
+  }, [markers, polygons, map, isLoaded]);
+
+  const handleLoadSuccess = () => {
+    console.log('[GoogleMapsDisplay] LoadScript completed successfully');
+    setIsLoaded(true);
+  };
+
+  const handleLoadError = (error) => {
+    console.error('[GoogleMapsDisplay] LoadScript error:', error);
+    setError(`Failed to load Google Maps: ${error?.message || 'Unknown error'}`);
+  };
 
   if (!apiKey) {
     return (
@@ -137,10 +167,35 @@ export default function GoogleMapsDisplay({
     );
   }
 
+  if (error) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: '100%',
+          background: '#ffebee',
+          color: '#c62828',
+          borderRadius: '12px',
+          padding: '2rem',
+          textAlign: 'center',
+        }}
+      >
+        <div>
+          <p>❌ Error loading map</p>
+          <small>{error}</small>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <LoadScript
       googleMapsApiKey={apiKey}
       libraries={['drawing', 'places']}
+      onLoad={handleLoadSuccess}
+      onError={handleLoadError}
     >
       <GoogleMap
         mapContainerStyle={mapContainerStyle}
