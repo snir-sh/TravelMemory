@@ -1,16 +1,26 @@
-import React from 'react';
+import React, { useState } from 'react';
+import LandingPage from './LandingPage';
+import MapView from './MapView';
+import './App.css';
 
 function App() {
+  const [currentPage, setCurrentPage] = useState('landing');
+
+  const handleGetStarted = () => {
+    setCurrentPage('map');
+  };
+
+  const handleBackToLanding = () => {
+    setCurrentPage('landing');
+  };
+
   return (
-    <div style={{ textAlign: 'center' }}>
-      <header>
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a href="https://reactjs.org" target="_blank" rel="noopener noreferrer">
-          Learn React
-        </a>
-      </header>
+    <div className="app">
+      {currentPage === 'landing' ? (
+        <LandingPage onGetStarted={handleGetStarted} />
+      ) : (
+        <MapView onBackToLanding={handleBackToLanding} />
+      )}
     </div>
   );
 }
