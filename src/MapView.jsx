@@ -4,6 +4,7 @@ import { EditControl } from 'react-leaflet-draw';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import 'leaflet-draw/dist/leaflet.draw.css';
+import { MapProviderFactory } from './services/mapProviders';
 import './MapView.css';
 
 // Fix default marker icons
@@ -22,65 +23,19 @@ export default function MapView({ onBackToLanding }) {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [map, setMap] = useState(null);
   const [drawings, setDrawings] = useState([]);
+  const [mapProvider] = useState(() => MapProviderFactory.getProvider('nominatim'));
 
-  // Geocode location text to coordinates
+  // Geocode location text to coordinates using provider
   const geocodeLocation = async (locationName) => {
-    try {
-      const response = await fetch(
-        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
-          locationName
-        )}&count=1&language=en&format=json`
-      );
-      const data = await response.json();
-
-      if (data.results && data.results.length > 0) {
-        const result = data.results[0];
-        const displayName = `${result.name}${result.admin1 ? ', ' + result.admin1 : ''}${result.country ? ', ' + result.country : ''}`;
-        return {
-          coords: [result.latitude, result.longitude],
-          name: displayName,
-        };
-      }
-      return null;
-    } catch (error) {
-      console.error('Geocoding error:', error);
-      return null;
-    }
+    return await mapProvider.geocodeLocation(locationName);
   };
 
-  // Fetch polygon boundary from Nominatim
+  // Fetch polygon boundary from provider
   const fetchPolygonBoundary = async (lat, lon, name) => {
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10&polygon_geojson=1`
-      );
-      const data = await response.json();
-
-      if (data.geojson) {
-        if (data.geojson.type === 'Polygon') {
-          const polygonCoords = data.geojson.coordinates[0].map((coord) => [
-            coord[1],
-            coord[0],
-          ]);
-          return {
-            id: Date.now(),
-            name: name,
-            coords: polygonCoords,
-          };
-        } else if (data.geojson.type === 'MultiPolygon') {
-          return data.geojson.coordinates.map((polygon, index) => ({
-            id: Date.now() + index,
-            name: name,
-            coords: polygon[0].map((coord) => [coord[1], coord[0]]),
-          }));
-        }
-      }
-      return null;
-    } catch (error) {
-      console.error('Polygon fetch error:', error);
-      return null;
-    }
+    return await mapProvider.fetchPolygonBoundary(lat, lon, name);
   };
+
+  // Autocomplete suggestions using provider
   const fetchSuggestions = async (query) => {
     console.log('Fetching suggestions for:', query);
     if (query.length < 2) {
@@ -90,24 +45,10 @@ export default function MapView({ onBackToLanding }) {
     }
 
     try {
-      const response = await fetch(
-        `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(
-          query
-        )}&count=5&language=en&format=json`
-      );
-      const data = await response.json();
-      
-      if (data.results) {
-        const suggestions = data.results.map((result) => ({
-          lat: result.latitude,
-          lon: result.longitude,
-          display_name: `${result.name}${result.admin1 ? ', ' + result.admin1 : ''}${result.country ? ', ' + result.country : ''}`,
-          geojson: null, // Open-Meteo doesn't provide geojson
-        }));
-        console.log('Suggestions received:', suggestions);
-        setSuggestions(suggestions);
-        setShowSuggestions(suggestions.length > 0);
-      }
+      const results = await mapProvider.searchLocations(query, 5);
+      console.log('Suggestions received:', results);
+      setSuggestions(results);
+      setShowSuggestions(results.length > 0);
     } catch (error) {
       console.error('Suggestion fetch error:', error);
       setSuggestions([]);
