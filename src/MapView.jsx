@@ -1,19 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, FeatureGroup, Polygon } from 'react-leaflet';
-import { EditControl } from 'react-leaflet-draw';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import 'leaflet-draw/dist/leaflet.draw.css';
+import React, { useState, useEffect, useRef } from 'react';
+import GoogleMapsDisplay from './GoogleMapsDisplay';
 import { MapProviderFactory } from './services/mapProviders';
 import './MapView.css';
-
-// Fix default marker icons
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: require('leaflet/dist/images/marker-icon-2x.png'),
-  iconUrl: require('leaflet/dist/images/marker-icon.png'),
-  shadowUrl: require('leaflet/dist/images/marker-shadow.png'),
-});
 
 export default function MapView({ onBackToLanding }) {
   const [markers, setMarkers] = useState([]);
@@ -21,18 +9,18 @@ export default function MapView({ onBackToLanding }) {
   const [locationInput, setLocationInput] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [map, setMap] = useState(null);
-  const [drawings, setDrawings] = useState([]);
-  const [mapProvider] = useState(() => MapProviderFactory.getProvider('nominatim'));
+  const [mapProvider] = useState(() => MapProviderFactory.getProvider('google'));
+  const mapRef = useRef(null);
 
-  // Geocode location text to coordinates using provider
-  const geocodeLocation = async (locationName) => {
-    return await mapProvider.geocodeLocation(locationName);
-  };
-
-  // Fetch polygon boundary from provider
-  const fetchPolygonBoundary = async (lat, lon, name) => {
-    return await mapProvider.fetchPolygonBoundary(lat, lon, name);
+  // Pan to location on Google Maps
+  const panToLocation = (location) => {
+    if (mapRef.current) {
+      mapRef.current.panTo({
+        lat: location.coords[0],
+        lng: location.coords[1],
+      });
+      mapRef.current.setZoom(12);
+    }
   };
 
   // Autocomplete suggestions using provider
@@ -71,7 +59,7 @@ export default function MapView({ onBackToLanding }) {
     let hasPolygon = false;
 
     // Try to fetch polygon boundary
-    const polygonData = await fetchPolygonBoundary(
+    const polygonData = await mapProvider.fetchPolygonBoundary(
       suggestion.lat,
       suggestion.lon,
       suggestion.display_name
@@ -101,9 +89,8 @@ export default function MapView({ onBackToLanding }) {
     setSuggestions([]);
     setShowSuggestions(false);
 
-    if (map) {
-      map.flyTo(location.coords, 12);
-    }
+    // Pan to new location
+    panToLocation(location);
   };
 
   const handleAddLocation = async () => {
@@ -112,7 +99,7 @@ export default function MapView({ onBackToLanding }) {
       return;
     }
 
-    const location = await geocodeLocation(locationInput);
+    const location = await mapProvider.geocodeLocation(locationInput);
     if (location) {
       const newMarker = {
         id: Date.now(),
@@ -124,9 +111,7 @@ export default function MapView({ onBackToLanding }) {
       setShowSuggestions(false);
 
       // Pan to new location
-      if (map) {
-        map.flyTo(location.coords, 10);
-      }
+      panToLocation(location);
     } else {
       alert('Location not found. Try a more specific address.');
     }
@@ -135,11 +120,6 @@ export default function MapView({ onBackToLanding }) {
   const handleDelete = (id) => {
     setMarkers(markers.filter((marker) => marker.id !== id));
     setPolygons(polygons.filter((polygon) => polygon.id !== id));
-  };
-
-  const handleDrawingComplete = (e) => {
-    const layer = e.layer;
-    setDrawings([...drawings, layer]);
   };
 
   return (
@@ -226,51 +206,11 @@ export default function MapView({ onBackToLanding }) {
           </div>
         </div>
 
-        <MapContainer
-          center={[20, 0]}
-          zoom={2}
-          className="map"
-          whenCreated={setMap}
-        >
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          />
-
-          <FeatureGroup>
-            <EditControl
-              position="topright"
-              onCreated={handleDrawingComplete}
-              draw={{
-                rectangle: true,
-                polygon: true,
-                circle: false,
-                circlemarker: false,
-                marker: false,
-                polyline: true,
-              }}
-            />
-          </FeatureGroup>
-
-          {markers.map((marker) => (
-            <Marker key={marker.id} position={marker.coords}>
-              <Popup>{marker.name}</Popup>
-            </Marker>
-          ))}
-
-          {polygons.map((polygon) => (
-            <Polygon
-              key={polygon.id}
-              positions={polygon.coords}
-              color="#667eea"
-              weight={2}
-              opacity={0.7}
-              fillOpacity={0.3}
-            >
-              <Popup>{polygon.name}</Popup>
-            </Polygon>
-          ))}
-        </MapContainer>
+        <GoogleMapsDisplay
+          markers={markers}
+          polygons={polygons}
+          mapRef={mapRef}
+        />
       </div>
     </div>
   );

@@ -11,9 +11,9 @@ import { GoogleMapsProvider } from './GoogleMapsProvider';
  */
 export const MapProviderFactory = {
   providers: {
-    nominatim: new NominatimProvider(),
+    // nominatim: new NominatimProvider(),
     // Uncomment and add API key to enable Google Maps
-    // google: new GoogleMapsProvider(),
+    google: new GoogleMapsProvider(),
   },
 
   /**
