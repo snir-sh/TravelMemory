@@ -47,7 +47,7 @@ export default function MapView({ onBackToLanding }) {
   const [locationInput, setLocationInput] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [mapProvider] = useState(() => MapProviderFactory.getProvider('google'));
+  const [mapProvider] = useState(() => MapProviderFactory.getProvider('tomtom'));
   const [mapReady, setMapReady] = useState(false);
   const mapRef = useRef(null);
 

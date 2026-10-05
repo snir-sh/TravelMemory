@@ -433,8 +433,131 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+/**
+ * TomTom Search API
+ * Search for locations with TomTom
+ */
+app.get('/api/tomtom/search', async (req, res) => {
+  try {
+    const { q, limit = 5 } = req.query;
+    const apiKey = process.env.TOMTOM_API_KEY;
+
+    if (!apiKey) {
+      return res.status(500).json({ error: 'TomTom API key not configured' });
+    }
+
+    if (!q) {
+      return res.status(400).json({ error: 'Missing q parameter' });
+    }
+
+    const url = `https://api.tomtom.com/search/2/search/${encodeURIComponent(q)}.json?key=${apiKey}&limit=${limit}`;
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (!data.results) {
+      return res.json({ predictions: [] });
+    }
+
+    const predictions = data.results.map(result => ({
+      lat: result.position.lat,
+      lon: result.position.lng,
+      display_name: result.address.freeformAddress,
+      name: result.poi?.name || result.address.municipality || result.address.freeformAddress,
+      type: result.type || 'Place',
+    }));
+
+    res.json({ predictions });
+  } catch (error) {
+    console.error('[TomTom Search] Error:', error);
+    res.status(500).json({ error: 'Failed to search with TomTom' });
+  }
+});
+
+/**
+ * TomTom Reverse Geocoding API
+ * Get detailed geometry/polygon for a location
+ */
+app.get('/api/tomtom/reverse-geocode', async (req, res) => {
+  try {
+    const { lat, lon } = req.query;
+    const apiKey = process.env.TOMTOM_API_KEY;
+
+    if (!apiKey) {
+      return res.status(500).json({ error: 'TomTom API key not configured' });
+    }
+
+    if (!lat || !lon) {
+      return res.status(400).json({ error: 'Missing lat or lon parameters' });
+    }
+
+    // TomTom Reverse Geocoding endpoint with geometry
+    const url = `https://api.tomtom.com/search/2/reverseGeocode/${lat},${lon}.json?key=${apiKey}&returnGeometry=true`;
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (!data.addresses || data.addresses.length === 0) {
+      return res.json({ error: 'No address found' });
+    }
+
+    const address = data.addresses[0];
+    
+    res.json({
+      display_name: address.address.freeformAddress,
+      lat: address.position.lat,
+      lon: address.position.lng,
+      geometry: address.geometry || null,
+    });
+  } catch (error) {
+    console.error('[TomTom Reverse Geocode] Error:', error);
+    res.status(500).json({ error: 'Failed to reverse geocode with TomTom' });
+  }
+});
+
+/**
+ * TomTom Geocoding API
+ * Get coordinates for an address
+ */
+app.get('/api/tomtom/geocode', async (req, res) => {
+  try {
+    const { address } = req.query;
+    const apiKey = process.env.TOMTOM_API_KEY;
+
+    if (!apiKey) {
+      return res.status(500).json({ error: 'TomTom API key not configured' });
+    }
+
+    if (!address) {
+      return res.status(400).json({ error: 'Missing address parameter' });
+    }
+
+    const url = `https://api.tomtom.com/search/2/geocode/${encodeURIComponent(address)}.json?key=${apiKey}&returnGeometry=true`;
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (!data.results || data.results.length === 0) {
+      return res.json({ error: 'Address not found' });
+    }
+
+    const result = data.results[0];
+    
+    res.json({
+      lat: result.position.lat,
+      lon: result.position.lng,
+      display_name: result.address.freeformAddress,
+      geometry: result.geometry || null,
+    });
+  } catch (error) {
+    console.error('[TomTom Geocode] Error:', error);
+    res.status(500).json({ error: 'Failed to geocode with TomTom' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`🗺️  TravelMemory API Proxy running on http://localhost:${PORT}`);
   console.log(`   Nominatim proxy ready at /api/nominatim/*`);
   console.log(`   Google Maps proxy ready at /api/google/*`);
+  console.log(`   TomTom proxy ready at /api/tomtom/*`);
 });

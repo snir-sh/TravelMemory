@@ -79,37 +79,12 @@ export class GoogleMapsProvider extends MapProvider {
 
   async fetchPolygonBoundary(lat, lon, name, googleBounds) {
     try {
-      console.log('[GoogleMapsProvider] Fetching polygon boundary:', name);
+      console.log('[GoogleMapsProvider] Fetching polygon boundary for:', name);
       
-      // PREFER: Use Google Maps bounds if available
-      if (googleBounds && googleBounds.northeast && googleBounds.southwest) {
-        console.log('[GoogleMapsProvider] Using Google Maps bounds');
-        
-        const ne = googleBounds.northeast;
-        const sw = googleBounds.southwest;
-        
-        // Create a rectangle polygon from Google's bounding box
-        // Format: [[lat, lon], ...]
-        const polygonCoords = [
-          [sw.lat, sw.lng],  // southwest
-          [sw.lat, ne.lng],  // southeast
-          [ne.lat, ne.lng],  // northeast
-          [ne.lat, sw.lng],  // northwest
-          [sw.lat, sw.lng],  // close the polygon
-        ];
-        
-        return {
-          id: Date.now(),
-          name: name,
-          coords: polygonCoords,
-        };
-      }
-      
-      // FALLBACK: Use Nominatim search if no Google bounds
-      console.log('[GoogleMapsProvider] No Google bounds, falling back to Nominatim:', name);
+      // Query Nominatim with multiple results and smart filtering
       const nominatimUrl = 'http://localhost:3001/api/nominatim/search';
       const response = await fetch(
-        `${nominatimUrl}?q=${encodeURIComponent(name)}&limit=5`
+        `${nominatimUrl}?q=${encodeURIComponent(name)}&limit=10`
       );
 
       if (!response.ok) {
@@ -119,54 +94,55 @@ export class GoogleMapsProvider extends MapProvider {
       const data = await response.json();
       
       if (!data || data.length === 0) {
-        console.warn('[GoogleMapsProvider] No search results found');
+        console.warn('[GoogleMapsProvider] No Nominatim results found');
         return null;
       }
 
-      // Filter results to prefer administrative boundaries (more official/stable)
-      // Then sort by importance
-      const sortedResults = data
+      // Smart filtering: prefer administrative boundaries near the Google coordinates
+      const candidatePolygons = data
         .filter(r => {
-          // Prefer results with polygon geometry
-          const hasPolygon = r.geojson && (r.geojson.type === 'Polygon' || r.geojson.type === 'MultiPolygon');
-          if (!hasPolygon) return false;
+          // Must have polygon geometry
+          if (!r.geojson || (r.geojson.type !== 'Polygon' && r.geojson.type !== 'MultiPolygon')) {
+            return false;
+          }
           
-          // Strong preference: boundary/administrative (official boundaries)
+          // Strongly prefer: boundary/administrative (official boundaries)
           if (r.class === 'boundary' && r.type === 'administrative') return true;
           
-          // Secondary: place/town, place/village, place/settlement
-          if (r.class === 'place' && ['town', 'village', 'city', 'settlement', 'hamlet'].includes(r.type)) return true;
+          // Accept: place types that represent settlements
+          if (r.class === 'place' && ['town', 'village', 'city', 'settlement', 'hamlet', 'borough'].includes(r.type)) {
+            return true;
+          }
           
           return false;
         })
         .sort((a, b) => {
-          // Prioritize boundary/administrative
+          // Priority 1: boundary/administrative
           const aIsBoundary = a.class === 'boundary' && a.type === 'administrative' ? 1 : 0;
           const bIsBoundary = b.class === 'boundary' && b.type === 'administrative' ? 1 : 0;
           if (aIsBoundary !== bIsBoundary) return bIsBoundary - aIsBoundary;
           
-          // Then by importance (Nominatim's ranking)
+          // Priority 2: Closer to Google's coordinates (within bounding box)
+          const aDist = Math.abs(parseFloat(a.lat) - lat) + Math.abs(parseFloat(a.lon) - lon);
+          const bDist = Math.abs(parseFloat(b.lat) - lat) + Math.abs(parseFloat(b.lon) - lon);
+          if (Math.abs(aDist - bDist) > 0.01) return aDist - bDist;
+          
+          // Priority 3: By Nominatim importance
           return (b.importance || 0) - (a.importance || 0);
         });
 
-      if (sortedResults.length === 0) {
-        console.warn('[GoogleMapsProvider] No suitable results with polygons found');
+      if (candidatePolygons.length === 0) {
+        console.warn('[GoogleMapsProvider] No suitable polygons found after filtering');
         return null;
       }
 
-      const result = sortedResults[0];
+      const result = candidatePolygons[0];
+      console.log('[GoogleMapsProvider] Selected result:', result.name, `(${result.class}/${result.type})`);
       
-      // Check if result has a polygon geometry
-      if (!result.geojson || (result.geojson.type !== 'Polygon' && result.geojson.type !== 'MultiPolygon')) {
-        console.warn('[GoogleMapsProvider] No polygon geometry found, will use circle');
-        return null;
-      }
-
-      // Check if we got a polygon from Nominatim
+      // Handle Polygon
       if (result.geojson.type === 'Polygon') {
         const coordinates = result.geojson.coordinates[0];
         
-        // Check if polygon is valid and not too small
         if (coordinates.length < 4) {
           console.warn('[GoogleMapsProvider] Polygon has too few points, using circle fallback');
           return null;
@@ -182,8 +158,8 @@ export class GoogleMapsProvider extends MapProvider {
         };
       }
 
+      // Handle MultiPolygon - use the largest polygon
       if (result.geojson.type === 'MultiPolygon') {
-        // Handle MultiPolygon - use the largest polygon
         const polygons = result.geojson.coordinates;
         let largestPolygon = null;
         let largestSize = 0;
@@ -209,8 +185,7 @@ export class GoogleMapsProvider extends MapProvider {
         };
       }
 
-      // No polygon found - return null so MapView can draw a circle instead
-      console.warn('[GoogleMapsProvider] No polygon boundary found, will use circle fallback');
+      console.warn('[GoogleMapsProvider] No valid polygon geometry found');
       return null;
     } catch (error) {
       console.error('[GoogleMapsProvider] Polygon fetch error:', error);
