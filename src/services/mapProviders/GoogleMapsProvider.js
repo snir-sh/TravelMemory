@@ -85,7 +85,7 @@ export class GoogleMapsProvider extends MapProvider {
       // Reverse geocode often returns building/POI boundaries instead of administrative areas
       const nominatimUrl = 'http://localhost:3001/api/nominatim/search';
       const response = await fetch(
-        `${nominatimUrl}?q=${encodeURIComponent(name)}&limit=1`
+        `${nominatimUrl}?q=${encodeURIComponent(name)}&limit=5`
       );
 
       if (!response.ok) {
@@ -99,7 +99,38 @@ export class GoogleMapsProvider extends MapProvider {
         return null;
       }
 
-      const result = data[0];
+      // Filter results to prefer administrative boundaries (more official/stable)
+      // Then sort by importance
+      const sortedResults = data
+        .filter(r => {
+          // Prefer results with polygon geometry
+          const hasPolygon = r.geojson && (r.geojson.type === 'Polygon' || r.geojson.type === 'MultiPolygon');
+          if (!hasPolygon) return false;
+          
+          // Strong preference: boundary/administrative (official boundaries)
+          if (r.class === 'boundary' && r.type === 'administrative') return true;
+          
+          // Secondary: place/town, place/village, place/settlement
+          if (r.class === 'place' && ['town', 'village', 'city', 'settlement', 'hamlet'].includes(r.type)) return true;
+          
+          return false;
+        })
+        .sort((a, b) => {
+          // Prioritize boundary/administrative
+          const aIsBoundary = a.class === 'boundary' && a.type === 'administrative' ? 1 : 0;
+          const bIsBoundary = b.class === 'boundary' && b.type === 'administrative' ? 1 : 0;
+          if (aIsBoundary !== bIsBoundary) return bIsBoundary - aIsBoundary;
+          
+          // Then by importance (Nominatim's ranking)
+          return (b.importance || 0) - (a.importance || 0);
+        });
+
+      if (sortedResults.length === 0) {
+        console.warn('[GoogleMapsProvider] No suitable results with polygons found');
+        return null;
+      }
+
+      const result = sortedResults[0];
       
       // Check if result has a polygon geometry
       if (!result.geojson || (result.geojson.type !== 'Polygon' && result.geojson.type !== 'MultiPolygon')) {
