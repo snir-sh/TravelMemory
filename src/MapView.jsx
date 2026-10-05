@@ -71,14 +71,14 @@ export default function MapView({ onBackToLanding }) {
     }
   }, [markers, polygons, circles]);
 
-  // Pan to location on Google Maps
+  // Pan to location on Google Maps - moderate zoom, no aggressive zooming
   const panToLocation = (location) => {
     if (mapRef.current) {
       mapRef.current.panTo({
         lat: location.coords[0],
         lng: location.coords[1],
       });
-      mapRef.current.setZoom(12);
+      mapRef.current.setZoom(11); // Moderate zoom level instead of aggressive 12
     }
   };
 
@@ -129,52 +129,29 @@ export default function MapView({ onBackToLanding }) {
       const colorIndex = polygons.length;
       const color = getColorForPolygon(colorIndex);
       
-      // Fetch real location type from Wikidata (async, non-blocking)
-      let realType = location.type;
-      try {
-        const typeRes = await fetch(`http://localhost:3001/api/wikidata/settlement-type?name=${encodeURIComponent(location.name.split(',')[0])}`);
-        const typeData = await typeRes.json();
-        if (typeData.type) realType = typeData.type;
-      } catch (e) {
-        // Keep original type if lookup fails
-        console.log('Wikidata lookup failed, keeping type:', location.type);
-      }
-      
-      if (Array.isArray(polygonData)) {
-        // Multiple polygons (MultiPolygon)
-        const coloredPolygons = polygonData.map((poly) => ({
-          ...poly,
-          color,
-          type: realType,
-        }));
-        setPolygons([...polygons, ...coloredPolygons]);
+      const polygonToAdd = Array.isArray(polygonData)
+        ? polygonData.map((poly) => ({
+            ...poly,
+            color,
+            type: location.type,
+          }))
+        : { ...polygonData, color, type: location.type };
+
+      if (Array.isArray(polygonToAdd)) {
+        setPolygons([...polygons, ...polygonToAdd]);
       } else {
-        // Single polygon
-        setPolygons([...polygons, { ...polygonData, color, type: realType }]);
+        setPolygons([...polygons, polygonToAdd]);
       }
       hasPolygon = true;
-    }
-
-    // Only add circle if no polygon was added
-    if (!hasPolygon) {
-      // Fetch real location type from Wikidata
-      let realType = location.type;
-      try {
-        const typeRes = await fetch(`http://localhost:3001/api/wikidata/settlement-type?name=${encodeURIComponent(location.name.split(',')[0])}`);
-        const typeData = await typeRes.json();
-        if (typeData.type) realType = typeData.type;
-      } catch (e) {
-        // Keep original type if lookup fails
-        console.log('Wikidata lookup failed, keeping type:', location.type);
-      }
-      
+    } else {
+      // No polygon - add circle
       const newCircle = {
         id: Date.now(),
         lat: location.coords[0],
         lng: location.coords[1],
         name: location.name,
-        type: realType,
-        radius: 2000, // 2km smaller default radius for location
+        type: location.type,
+        radius: 2000,
       };
       setCircles([...circles, newCircle]);
     }
@@ -183,8 +160,34 @@ export default function MapView({ onBackToLanding }) {
     setSuggestions([]);
     setShowSuggestions(false);
 
-    // Pan to new location
+    // Pan to new location (with moderate zoom)
     panToLocation(location);
+
+    // Fetch real type from Wikidata asynchronously (doesn't block adding)
+    const locationName = location.name.split(',')[0].trim();
+    try {
+      const typeRes = await fetch(`http://localhost:3001/api/wikidata/settlement-type?name=${encodeURIComponent(locationName)}`);
+      const typeData = await typeRes.json();
+      if (typeData.type && typeData.type !== location.type) {
+        // Update the type if different
+        if (hasPolygon) {
+          setPolygons((prevPolygons) =>
+            prevPolygons.map((poly) =>
+              poly.name === location.name ? { ...poly, type: typeData.type } : poly
+            )
+          );
+        } else {
+          setCircles((prevCircles) =>
+            prevCircles.map((circle) =>
+              circle.name === location.name ? { ...circle, type: typeData.type } : circle
+            )
+          );
+        }
+        console.log('[MapView] Updated type to:', typeData.type);
+      }
+    } catch (e) {
+      console.log('[MapView] Wikidata type lookup skipped (timeout or error)');
+    }
   };
 
   const handleAddLocation = async () => {
@@ -223,6 +226,7 @@ export default function MapView({ onBackToLanding }) {
     setMarkers(markers.filter((marker) => marker.id !== id));
     setPolygons(polygons.filter((polygon) => polygon.id !== id));
     setCircles(circles.filter((circle) => circle.id !== id));
+    // Don't pan/zoom when deleting - just remove silently
   };
 
   const handleClearTrip = () => {
