@@ -77,12 +77,36 @@ export class GoogleMapsProvider extends MapProvider {
     }
   }
 
-  async fetchPolygonBoundary(lat, lon, name) {
+  async fetchPolygonBoundary(lat, lon, name, googleBounds) {
     try {
-      console.log('[GoogleMapsProvider] Fetching polygon boundary via Nominatim:', name);
+      console.log('[GoogleMapsProvider] Fetching polygon boundary:', name);
       
-      // Use Nominatim search (by name) instead of reverse geocode
-      // Reverse geocode often returns building/POI boundaries instead of administrative areas
+      // PREFER: Use Google Maps bounds if available
+      if (googleBounds && googleBounds.northeast && googleBounds.southwest) {
+        console.log('[GoogleMapsProvider] Using Google Maps bounds');
+        
+        const ne = googleBounds.northeast;
+        const sw = googleBounds.southwest;
+        
+        // Create a rectangle polygon from Google's bounding box
+        // Format: [[lat, lon], ...]
+        const polygonCoords = [
+          [sw.lat, sw.lng],  // southwest
+          [sw.lat, ne.lng],  // southeast
+          [ne.lat, ne.lng],  // northeast
+          [ne.lat, sw.lng],  // northwest
+          [sw.lat, sw.lng],  // close the polygon
+        ];
+        
+        return {
+          id: Date.now(),
+          name: name,
+          coords: polygonCoords,
+        };
+      }
+      
+      // FALLBACK: Use Nominatim search if no Google bounds
+      console.log('[GoogleMapsProvider] No Google bounds, falling back to Nominatim:', name);
       const nominatimUrl = 'http://localhost:3001/api/nominatim/search';
       const response = await fetch(
         `${nominatimUrl}?q=${encodeURIComponent(name)}&limit=5`

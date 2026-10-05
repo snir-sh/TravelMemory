@@ -126,6 +126,7 @@ app.get('/api/google/autocomplete', async (req, res) => {
           if (geocodeData.results && geocodeData.results.length > 0) {
             const result = geocodeData.results[0];
             const location = result.geometry.location;
+            const bounds = result.geometry.bounds || result.geometry.viewport;
             
             // Use generic 'Place' type for autocomplete - will get real type from Nominatim when added
             let locationType = 'Place';
@@ -154,6 +155,10 @@ app.get('/api/google/autocomplete', async (req, res) => {
               display_name: placeText,
               place_id: suggestion.placePrediction?.placeId || '',
               type: locationType,
+              bounds: bounds ? {
+                northeast: bounds.northeast,
+                southwest: bounds.southwest,
+              } : null,
             });
           }
         } catch (error) {
@@ -196,11 +201,16 @@ app.get('/api/google/geocode', async (req, res) => {
     if (data.results && data.results.length > 0) {
       const result = data.results[0];
       const location = result.geometry.location;
+      const bounds = result.geometry.bounds || result.geometry.viewport;
 
       return res.json({
         lat: location.lat,
         lon: location.lng,
         display_name: result.formatted_address,
+        bounds: bounds ? {
+          northeast: bounds.northeast,
+          southwest: bounds.southwest,
+        } : null,
       });
     }
 

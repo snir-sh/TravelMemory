@@ -122,7 +122,8 @@ export default function MapView({ onBackToLanding }) {
     const polygonData = await mapProvider.fetchPolygonBoundary(
       suggestion.lat,
       suggestion.lon,
-      suggestion.display_name
+      suggestion.display_name,
+      suggestion.bounds
     );
 
     if (polygonData) {
