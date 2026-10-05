@@ -23,11 +23,11 @@ export const MapProviderFactory = {
    * @param {string} name - Provider name (nominatim, google, tomtom, etc)
    * @returns {MapProvider} Provider instance
    */
-  getProvider(name = 'tomtom') {
+  getProvider(name = 'google') {
     const provider = this.providers[name];
     if (!provider) {
-      console.warn(`Provider "${name}" not found. Using default "tomtom"`);
-      return this.providers.tomtom || this.providers.google;
+      console.warn(`Provider "${name}" not found. Using default "google"`);
+      return this.providers.google;
     }
     return provider;
   },
