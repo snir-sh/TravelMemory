@@ -334,13 +334,33 @@ app.get('/api/wikidata/settlement-type', async (req, res) => {
     const escapedName = name.replace(/"/g, '\\"');
     
     // Query Wikidata SPARQL API - search by Hebrew or English label
+    // Filters to avoid disambiguation pages and redirects, only accepts settlement types
     const sparqlQuery = `
-      SELECT ?typeLabel WHERE {
+      SELECT DISTINCT ?typeLabel WHERE {
         ?item rdfs:label "${escapedName}"@he .
         ?item wdt:P31 ?type .
+        
+        # Exclude disambiguation pages (P31 = wd:Q4167410)
+        FILTER (?type != wd:Q4167410) .
+        # Exclude redirect pages (P31 = wd:Q15241385)
+        FILTER (?type != wd:Q15241385) .
+        
+        # Only accept settlement-related types
+        VALUES ?type {
+          wd:Q515     # city
+          wd:Q3957    # town
+          wd:Q7930    # kibbutz
+          wd:Q521286  # moshav
+          wd:Q486972  # settlement
+          wd:Q16970   # hamlet
+          wd:Q532     # village
+          wd:Q6256    # country
+          wd:Q2081671 # region
+        } .
+        
         SERVICE wikibase:label { bd:serviceParam wikibase:language "he" }
       }
-      LIMIT 5
+      LIMIT 1
     `;
 
     const url = 'https://query.wikidata.org/sparql?query=' + encodeURIComponent(sparqlQuery) + '&format=json';
